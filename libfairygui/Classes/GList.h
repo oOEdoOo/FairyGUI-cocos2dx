@@ -103,7 +103,12 @@ public:
     bool scrollItemToViewOnClick;
     bool foldInvisibleItems;
 
+    // 设置回调，给lua使用
+    int itemRendererCallback = -1;
+    void setItemRenderer(int luaCallback);
+    
 protected:
+    void renderListItem(int index, GObject* obj);
     virtual void handleControllerChanged(GController* c) override;
     virtual void handleSizeChanged() override;
     virtual void updateBounds() override;

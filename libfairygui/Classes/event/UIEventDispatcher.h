@@ -1,7 +1,7 @@
 #ifndef __UIEVENTDISPATCHER_H__
 #define __UIEVENTDISPATCHER_H__
 
-#include "FairyGUIMacros.h"
+//#include "FairyGUIMacros.h"
 #include "cocos2d.h"
 #include "EventContext.h"
 #include "UIEventType.h"

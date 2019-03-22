@@ -3,6 +3,7 @@
 #include "UIPackage.h"
 #include "UIConfig.h"
 #include "utils/Bytebuffer.h"
+#include "CCLuaEngine.h"
 
 NS_FGUI_BEGIN
 USING_NS_CC;
@@ -54,6 +55,12 @@ GList::~GList()
 
     _selectionController = nullptr;
     scrollItemToViewOnClick = false;
+    
+    if (itemRendererCallback != -1) {
+        auto engine = LuaEngine::getInstance();
+        LuaStack* stack = engine->getLuaStack();
+        stack->removeScriptHandler(itemRendererCallback);
+    }
 }
 
 void GList::setLayout(ListLayoutType value)
@@ -148,6 +155,22 @@ void GList::setAutoResizeItem(bool value)
         if (_virtual)
             setVirtualListChangedFlag(true);
     }
+}
+
+void GList::setItemRenderer(int luaCallback)
+{
+    this->itemRendererCallback = luaCallback;
+    this->itemRenderer = CC_CALLBACK_2(GList::renderListItem, this);
+}
+
+void GList::renderListItem(int index, GObject *obj)
+{
+    auto engine = LuaEngine::getInstance();
+    LuaStack* stack = engine->getLuaStack();
+    //第一个参数是函数的整数句柄，第二个参数是函数参数个数
+    stack->pushInt(index);
+    stack->pushObject(obj, "GObject");
+    stack->executeFunctionByHandler(this->itemRendererCallback,2);
 }
 
 GObject * GList::getFromPool(const std::string& url)
@@ -1075,7 +1098,7 @@ void GList::setNumItems(int value)
         if (_virtualListChanged != 0)
             CALL_LATER_CANCEL(GList, doRefreshVirtualList);
 
-        //����ˢ��
+        //¡¢º¥À¢–¬
         doRefreshVirtualList();
     }
     else

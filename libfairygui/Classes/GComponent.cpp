@@ -132,6 +132,11 @@ void GComponent::removeChild(GObject* child)
 
 void GComponent::removeChildAt(int index)
 {
+    if (_children.size() == 0)
+    {
+        return;
+    }
+    
     GObject* child = _children.at(index);
 
     child->_parent = nullptr;

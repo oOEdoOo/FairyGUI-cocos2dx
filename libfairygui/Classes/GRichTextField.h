@@ -23,6 +23,11 @@ public:
 
     virtual TextFormat* getTextFormat() const override { return _richText->getTextFormat(); }
     virtual void applyTextFormat() override;
+    
+    void setString(std::string content)
+    {
+        this->setText(content);
+    };
 
 protected:
     virtual void handleInit() override;
