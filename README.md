@@ -38,7 +38,7 @@ Learn
 Lua
 ====
 
-- tolua：[说明文档](libfairygui/Calsses/README.md)
+- tolua：[说明文档](libfairygui/Classes/README.md)
 
 License
 ====
