@@ -29,4 +29,7 @@
 #include "tween/GTween.h"
 #include "FairyGUIMacros.h"
 
+#include "DefaultListFooter.h"
+#include "DefaultListHeader.h"
+
 #endif

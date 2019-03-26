@@ -104,11 +104,19 @@ public:
     bool foldInvisibleItems;
 
     // 设置回调，给lua使用
+    // itemRenderer
     int itemRendererCallback = -1;
     void setItemRenderer(int luaCallback);
     
+    // pull up and pull down callback
+    int onPullDownCallback = -1;
+    int onPullUpCallback = -1;
+    void setPullDownCallback(int onPullDownCallback);
+    void setPullUpCallback(int onPullUpCallback);
 protected:
     void renderListItem(int index, GObject* obj);
+    void onPullDownToRefresh(EventContext* context);
+    void onPullUpToRefresh(EventContext* context);
     virtual void handleControllerChanged(GController* c) override;
     virtual void handleSizeChanged() override;
     virtual void updateBounds() override;
