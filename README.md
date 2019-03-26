@@ -35,6 +35,11 @@ Learn
 - FAQ：[问答社区](http://ask.fairygui.com)  
 - 进群与小伙伴一起交流：一群 434866637（已满） 二群 614444599   
 
+Lua
+====
+
+- tolua：[说明文档](libfairygui/Calsses/README.md)
+
 License
 ====
 MIT 你可以自由使用FairyGUI在你的商业和非商业项目。  
