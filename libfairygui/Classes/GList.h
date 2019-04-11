@@ -107,12 +107,15 @@ public:
     // itemRenderer
     int itemRendererCallback = -1;
     void setItemRenderer(int luaCallback);
-    
+
     // pull up and pull down callback
     int onPullDownCallback = -1;
     int onPullUpCallback = -1;
     void setPullDownCallback(int onPullDownCallback);
     void setPullUpCallback(int onPullUpCallback);
+
+    int onItemClickCallback = -1;
+    void setOnItemClickCallback(int onItemClickCallback);
 protected:
     void renderListItem(int index, GObject* obj);
     void onPullDownToRefresh(EventContext* context);

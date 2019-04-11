@@ -36,6 +36,30 @@
 >
 > if (arg0 == 0)
 
+4. lua_fairygui_GObject_addLuaClickCallback中的
+>
+> ok &= luaval_to_int32(tolua_S, 2,(int *)&arg0, "fgui.GObject:addLuaClickCallback");
+>
+> if(!ok)
+>
+改为
+>
+> arg0 = toluafix_ref_function(tolua_S, 2, 0);
+>
+> if (arg0 == 0)
+
+5. lua_fairygui_GList_setOnItemClickCallback中的
+>
+> ok &= luaval_to_int32(tolua_S, 2,(int *)&arg0, "fgui.GList:setOnItemClickCallback");
+>
+> if(!ok)
+>
+改为
+>
+> arg0 = toluafix_ref_function(tolua_S, 2, 0);
+>
+> if (arg0 == 0)
+
 ----
 
 在tools/bindings-generator/targets/lua/conversions.yaml的ns_map中加入

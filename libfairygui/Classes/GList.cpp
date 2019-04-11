@@ -55,20 +55,24 @@ GList::~GList()
 
     _selectionController = nullptr;
     scrollItemToViewOnClick = false;
-    
+
     auto engine = LuaEngine::getInstance();
     LuaStack* stack = engine->getLuaStack();
-    
+
     if (itemRendererCallback != -1) {
         stack->removeScriptHandler(itemRendererCallback);
     }
-    
+
     if (onPullUpCallback != -1) {
         stack->removeScriptHandler(onPullUpCallback);
     }
-    
+
     if (onPullDownCallback != -1) {
         stack->removeScriptHandler(onPullDownCallback);
+    }
+
+    if (onItemClickCallback != -1) {
+        stack->removeScriptHandler(onItemClickCallback);
     }
 }
 
@@ -206,6 +210,11 @@ void GList::onPullUpToRefresh(EventContext* context)
     auto engine = LuaEngine::getInstance();
     LuaStack* stack = engine->getLuaStack();
     stack->executeFunctionByHandler(this->onPullUpCallback, 0);
+}
+
+void GList::setOnItemClickCallback(int onItemClickCallback)
+{
+    this->onItemClickCallback = onItemClickCallback;
 }
 
 GObject * GList::getFromPool(const std::string& url)
@@ -748,6 +757,14 @@ void GList::onClickItem(EventContext * context)
         _scrollPane->scrollToView(item, true);
 
     dispatchEvent(context->getType() == UIEventType::Click ? UIEventType::ClickItem : UIEventType::RightClickItem, item);
+
+    if (this->onItemClickCallback != -1)
+    {
+        auto engine = LuaEngine::getInstance();
+        LuaStack* stack = engine->getLuaStack();
+        stack->pushObject(item, "GObject");
+        stack->executeFunctionByHandler(this->onItemClickCallback, 1);
+    }
 }
 
 void GList::setSelectionOnEvent(GObject * item, InputEvent * evt)

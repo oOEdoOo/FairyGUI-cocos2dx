@@ -14,6 +14,7 @@
 #include "utils/WeakPtr.h"
 #include "utils/ByteBuffer.h"
 #include "display/FUISprite.h"
+#include "CCLuaEngine.h"
 
 NS_FGUI_BEGIN
 USING_NS_CC;
@@ -66,6 +67,8 @@ GObject::GObject() :
 GObject::~GObject()
 {
     removeFromParent();
+
+    removeLuaClickCallback();
 
     if (_displayObject)
     {
@@ -653,7 +656,7 @@ GObject* GObject::findParent() const
     if (_parent != nullptr)
         return _parent;
 
-    //¿ÉÄÜÓÐÐ©²»Ö±½ÓÔÚchildrenÀï£¬µ«node¹Ò×ÅµÄ
+    //ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½Ð©ï¿½ï¿½Ö±ï¿½ï¿½ï¿½ï¿½childrenï¿½ï£¬ï¿½ï¿½nodeï¿½ï¿½ï¿½Åµï¿½
     Node* pn = _displayObject->getParent();
     if (pn == nullptr)
         return nullptr;
@@ -953,7 +956,7 @@ void GObject::onTouchMove(EventContext* context)
         sensitivity = UIConfig::clickDragSensitivity;
 #else
         sensitivity = UIConfig::touchDragSensitivity;
-#endif 
+#endif
         if (std::abs(_dragTouchStartPos.x - evt->getPosition().x) < sensitivity
             && std::abs(_dragTouchStartPos.y - evt->getPosition().y) < sensitivity)
             return;
@@ -1006,6 +1009,28 @@ void GObject::onTouchEnd(EventContext* context)
     {
         _draggingObject = nullptr;
         dispatchEvent(UIEventType::DragEnd);
+    }
+}
+
+void GObject::addLuaClickCallback(int luaCallbackHandle)
+{
+    this->luaClickCallback = luaCallbackHandle;
+
+    addEventListener(UIEventType::Click, [this](EventContext* context){
+        auto engine = LuaEngine::getInstance();
+        LuaStack* stack = engine->getLuaStack();
+        stack->executeFunctionByHandler(this->luaClickCallback, 0);
+    });
+}
+
+void GObject::removeLuaClickCallback()
+{
+    auto engine = LuaEngine::getInstance();
+    LuaStack* stack = engine->getLuaStack();
+    if (luaClickCallback != -1)
+    {
+        stack->removeScriptHandler(luaClickCallback);
+        luaClickCallback = -1;
     }
 }
 

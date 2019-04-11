@@ -141,7 +141,13 @@ public:
 
     void addClickListener(const EventCallback& callback) { addEventListener(UIEventType::Click, callback); }
     void addClickListener(const EventCallback& callback, const EventTag& tag) { addEventListener(UIEventType::Click, callback, tag); }
-    void removeClickListener(const EventTag& tag) { removeEventListener(UIEventType::Click, tag); }
+    void removeClickListener(const EventTag& tag) { removeEventListener(UIEventType::Click, tag);
+        removeLuaClickCallback();
+    }
+
+    int luaClickCallback = -1;
+    void addLuaClickCallback(int luaCallbackHandle);
+    void removeLuaClickCallback();
 
     virtual void constructFromResource();
     virtual GObject* hitTest(const cocos2d::Vec2 & worldPoint, const cocos2d::Camera * camera);
