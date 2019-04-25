@@ -172,6 +172,12 @@ void GList::setAutoResizeItem(bool value)
 
 void GList::setItemRenderer(int luaCallback)
 {
+    auto engine = LuaEngine::getInstance();
+    LuaStack* stack = engine->getLuaStack();
+    if (itemRendererCallback != -1) {
+        stack->removeScriptHandler(itemRendererCallback);
+    }
+    
     this->itemRendererCallback = luaCallback;
     this->itemRenderer = CC_CALLBACK_2(GList::renderListItem, this);
 }

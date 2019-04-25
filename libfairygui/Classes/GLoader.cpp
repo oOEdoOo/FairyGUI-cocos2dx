@@ -302,6 +302,7 @@ void GLoader::loadExternal()
 
 void GLoader::freeExternal(cocos2d::SpriteFrame* spriteFrame)
 {
+    Director::getInstance()->getTextureCache()->removeTextureForKey(_url);
 }
 
 void GLoader::onExternalLoadSuccess(cocos2d::SpriteFrame* spriteFrame)
