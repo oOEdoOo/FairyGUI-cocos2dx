@@ -336,7 +336,7 @@ void GLoader::clearContent()
     if (_content2 != nullptr)
     {
         _displayObject->removeChild(_content2->displayObject());
-        CC_SAFE_RELEASE(_content2);
+        CC_SAFE_RELEASE_NULL(_content2);
     }
     ((FUISprite*)_content)->clearContent();
 

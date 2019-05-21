@@ -74,13 +74,14 @@ UIPackage * UIPackage::addPackage(const string& assetPath)
         delete emptyImage;
     }
 
-    Data data;
-
-    if (FileUtils::getInstance()->getContents(assetPath + ".fui", &data) != FileUtils::Status::OK)
-    {
-        CCLOGERROR("FairyGUI: cannot load package from '%s'", assetPath.c_str());
-        return nullptr;
-    }
+//    Data data;
+    Data data = FileUtils::getInstance()->getDataFromFile(assetPath + ".fui");
+    
+    //    if (FileUtils::getInstance()->getContents(assetPath + ".fui", &data) != FileUtils::Status::OK)
+    //    {
+    //        CCLOGERROR("FairyGUI: cannot load package from '%s'", assetPath.c_str());
+    //        return nullptr;
+    //    }
 
     ssize_t size;
     char *p = (char*)data.takeBuffer(&size);

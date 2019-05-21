@@ -70,6 +70,7 @@ public:
 
     GComponent* getComponent() const { return _content2; }
 
+    cocos2d::Sprite *getFUISprite() const { return (cocos2d::Sprite*)_content; }
 protected:
     virtual void handleInit() override;
     virtual void handleSizeChanged() override;

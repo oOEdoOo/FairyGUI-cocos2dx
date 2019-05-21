@@ -1,5 +1,9 @@
 #include "TweenValue.h"
 
+#if CC_TARGET_PLATFORM == CC_PLATFORM_ANDROID
+#include "stdtostring.h"
+#endif
+
 NS_FGUI_BEGIN
 USING_NS_CC;
 

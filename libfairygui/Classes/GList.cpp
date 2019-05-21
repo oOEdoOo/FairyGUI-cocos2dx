@@ -218,9 +218,15 @@ void GList::onPullUpToRefresh(EventContext* context)
     stack->executeFunctionByHandler(this->onPullUpCallback, 0);
 }
 
-void GList::setOnItemClickCallback(int onItemClickCallback)
+void GList::setOnItemClickCallback(int callback)
 {
-    this->onItemClickCallback = onItemClickCallback;
+    if (this->onItemClickCallback != -1) {
+        auto engine = LuaEngine::getInstance();
+        LuaStack* stack = engine->getLuaStack();
+        stack->removeScriptHandler(this->onItemClickCallback);
+    }
+    
+    this->onItemClickCallback = callback;
 }
 
 GObject * GList::getFromPool(const std::string& url)
