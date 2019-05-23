@@ -28,7 +28,23 @@ public:
     void setMaxLength(int value);
     void setRestrict(const std::string& value);
 
+    // 设置回调，给lua使用
+    // itemRenderer
+    int onSubmitCallback = -1;
+    void setOnSubmit(int luaCallback);
+    
+    void setString(std::string content)
+    {
+        this->setText(content);
+    };
+    
+    std::string getString()
+    {
+        return this->getText();
+    }
 protected:
+    // onSubmit中调用lua函数
+    void onSubmit(EventContext *context);
     virtual void handleInit() override;
     virtual void handleSizeChanged() override;
     virtual void setup_beforeAdd(ByteBuffer* buffer, int beginPos) override;

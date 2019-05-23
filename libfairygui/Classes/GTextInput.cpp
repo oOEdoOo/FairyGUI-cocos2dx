@@ -5,6 +5,7 @@
 #include "utils/ByteBuffer.h"
 #include "utils/UBBParser.h"
 #include "utils/ToolSet.h"
+#include "CCLuaEngine.h"
 
 NS_FGUI_BEGIN
 USING_NS_CC;
@@ -15,6 +16,34 @@ GTextInput::GTextInput()
 
 GTextInput::~GTextInput()
 {
+    auto engine = LuaEngine::getInstance();
+    LuaStack* stack = engine->getLuaStack();
+    
+    if (onSubmitCallback != -1) {
+        stack->removeScriptHandler(onSubmitCallback);
+    }
+}
+
+void GTextInput::setOnSubmit(int luaCallback)
+{
+    auto engine = LuaEngine::getInstance();
+    LuaStack* stack = engine->getLuaStack();
+    if (onSubmitCallback != -1) {
+        stack->removeScriptHandler(onSubmitCallback);
+    }
+    
+    this->onSubmitCallback = luaCallback;
+}
+
+void GTextInput::onSubmit(EventContext *context)
+{
+    if (this->onSubmitCallback != -1)
+    {
+        auto engine = LuaEngine::getInstance();
+        LuaStack* stack = engine->getLuaStack();
+        
+        stack->executeFunctionByHandler(this->onSubmitCallback, 0);
+    }
 }
 
 void GTextInput::handleInit()
@@ -120,6 +149,7 @@ void GTextInput::editBoxReturn(cocos2d::ui::EditBox * editBox)
     //found that this will trigger even when focus is lost
     //if (isSingleLine())
     // dispatchEvent(UIEventType::Submit);
+    onSubmit(nullptr);
 }
 
 void GTextInput::editBoxTextChanged(cocos2d::ui::EditBox* editBox, const std::string& text)
