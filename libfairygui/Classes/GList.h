@@ -107,6 +107,9 @@ public:
     // itemRenderer
     int itemRendererCallback = -1;
     void setItemRenderer(int luaCallback);
+    
+    int itemProviderCallback = -1;
+    void setItemProvider(int luaCallback);
 
     // pull up and pull down callback
     int onPullDownCallback = -1;
@@ -118,6 +121,7 @@ public:
     void setOnItemClickCallback(int onItemClickCallback);
 protected:
     void renderListItem(int index, GObject* obj);
+    std::string getListItemResource(int index);
     void onPullDownToRefresh(EventContext* context);
     void onPullUpToRefresh(EventContext* context);
     virtual void handleControllerChanged(GController* c) override;

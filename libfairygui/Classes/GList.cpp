@@ -62,6 +62,10 @@ GList::~GList()
     if (itemRendererCallback != -1) {
         stack->removeScriptHandler(itemRendererCallback);
     }
+    
+    if (itemProviderCallback != -1) {
+        stack->removeScriptHandler(itemProviderCallback);
+    }
 
     if (onPullUpCallback != -1) {
         stack->removeScriptHandler(onPullUpCallback);
@@ -182,6 +186,18 @@ void GList::setItemRenderer(int luaCallback)
     this->itemRenderer = CC_CALLBACK_2(GList::renderListItem, this);
 }
 
+void GList::setItemProvider(int luaCallback)
+{
+    auto engine = LuaEngine::getInstance();
+    LuaStack* stack = engine->getLuaStack();
+    if (itemProviderCallback != -1) {
+        stack->removeScriptHandler(itemProviderCallback);
+    }
+    
+    this->itemProviderCallback = luaCallback;
+    this->itemProvider = CC_CALLBACK_1(GList::getListItemResource, this);
+}
+
 void GList::renderListItem(int index, GObject *obj)
 {
     auto engine = LuaEngine::getInstance();
@@ -190,6 +206,16 @@ void GList::renderListItem(int index, GObject *obj)
     stack->pushInt(index);
     stack->pushObject(obj, "GObject");
     stack->executeFunctionByHandler(this->itemRendererCallback,2);
+}
+
+std::string GList::getListItemResource(int index)
+{
+    auto engine = LuaEngine::getInstance();
+    LuaStack* stack = engine->getLuaStack();
+    //第一个参数是函数的整数句柄，第二个参数是函数参数个数
+    stack->pushInt(index);
+    std::string ret = stack->executeFunctionReturnStringByHandler(this->itemProviderCallback, 1);
+    return ret;
 }
 
 void GList::setPullDownCallback(int luaCallback)

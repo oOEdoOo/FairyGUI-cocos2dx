@@ -42,6 +42,11 @@ public:
     {
         return this->getText();
     }
+    
+    void setTextSingleLine(bool isSingleLine)
+    {
+        this->setSingleLine(isSingleLine);
+    }
 protected:
     // onSubmit中调用lua函数
     void onSubmit(EventContext *context);
