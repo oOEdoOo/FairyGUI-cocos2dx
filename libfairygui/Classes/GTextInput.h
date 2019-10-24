@@ -38,6 +38,11 @@ public:
         this->setText(content);
     };
     
+    void setTouchEnabled(bool value)
+    {
+        this->setTouchable(value);
+    }
+    
     std::string getString()
     {
         return this->getText();

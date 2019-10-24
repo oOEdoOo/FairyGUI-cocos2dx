@@ -1019,13 +1019,15 @@ void GObject::onTouchEnd(EventContext* context)
 
 void GObject::addLuaClickCallback(int luaCallbackHandle)
 {
+    this->removeLuaClickCallback();
+    
     this->luaClickCallback = luaCallbackHandle;
-
+    
     addEventListener(UIEventType::Click, [this](EventContext* context){
         auto engine = LuaEngine::getInstance();
         LuaStack* stack = engine->getLuaStack();
         stack->executeFunctionByHandler(this->luaClickCallback, 0);
-    });
+    }, EventTag(this));
 }
 
 void GObject::removeLuaClickCallback()
@@ -1036,6 +1038,8 @@ void GObject::removeLuaClickCallback()
     {
         stack->removeScriptHandler(luaClickCallback);
         luaClickCallback = -1;
+        
+        removeEventListener(UIEventType::Click, EventTag(this));
     }
 }
 

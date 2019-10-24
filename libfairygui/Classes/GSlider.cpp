@@ -1,6 +1,7 @@
 #include "GSlider.h"
 #include "PackageItem.h"
 #include "utils/ByteBuffer.h"
+#include "CCLuaEngine.h"
 
 NS_FGUI_BEGIN
 USING_NS_CC;
@@ -23,11 +24,16 @@ GSlider::GSlider() :
     _barStartX(0),
     _barStartY(0)
 {
+    this->addEventListener(UIEventType::Changed, CC_CALLBACK_1(GSlider::onChange, this));
 }
 
 GSlider::~GSlider()
 {
-
+    if (this->onChangeCallback != -1) {
+        auto engine = LuaEngine::getInstance();
+        LuaStack* stack = engine->getLuaStack();
+        stack->removeScriptHandler(this->onChangeCallback);
+    }
 }
 
 void GSlider::setTitleType(ProgressTitleType value)
@@ -54,6 +60,26 @@ void GSlider::setValue(double value)
     {
         _value = value;
         update();
+    }
+}
+
+void GSlider::setOnChange(int luaCallback)
+{
+    if (this->onChangeCallback != -1) {
+        auto engine = LuaEngine::getInstance();
+        LuaStack* stack = engine->getLuaStack();
+        stack->removeScriptHandler(this->onChangeCallback);
+    }
+    
+    this->onChangeCallback = luaCallback;
+}
+
+void GSlider::onChange(EventContext* context)
+{
+    if (this->onChangeCallback != -1) {
+        auto engine = LuaEngine::getInstance();
+        LuaStack* stack = engine->getLuaStack();
+        stack->executeFunctionByHandler(this->onChangeCallback, 0);
     }
 }
 

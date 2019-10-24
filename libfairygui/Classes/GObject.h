@@ -166,6 +166,8 @@ public:
     bool _gearLocked;
     bool _alignToBL;
 
+    void retainForLua() {this->retain();}
+    void releaseForLua() {this->release();}
 protected:
     GComponent* _parent;
     cocos2d::Node* _displayObject;

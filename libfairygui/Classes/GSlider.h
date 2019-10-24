@@ -27,7 +27,13 @@ public:
     bool changeOnClick;
     bool canDrag;
 
+    // itemRenderer
+    int onChangeCallback = -1;
+    void setOnChange(int luaCallback);
+    
 protected:
+    void onChange(EventContext* context);
+    
     virtual void handleSizeChanged() override;
     virtual void constructExtension(ByteBuffer* buffer) override;
     virtual void setup_afterAdd(ByteBuffer* buffer, int beginPos) override;

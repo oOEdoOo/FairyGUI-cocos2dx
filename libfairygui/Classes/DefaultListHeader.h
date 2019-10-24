@@ -30,6 +30,11 @@ private:
     void onSizeChanged(EventContext*);
     
     GController* _c1;
+    
+    Transition* _pull;
+    Transition* _release;
+    Transition* _loading;
+    Transition* _over;
 };
 
 

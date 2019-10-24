@@ -37,7 +37,11 @@ public:
     void setFillAmount(float value);
 
     virtual void constructFromResource() override;
-
+    
+    // modified by LM
+    cocos2d::Sprite *getSprite() {
+        return (cocos2d::Sprite*)this->_content;
+    }
 protected:
     virtual void handleInit() override;
     virtual void handleSizeChanged() override;
