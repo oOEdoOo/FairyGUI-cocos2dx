@@ -148,6 +148,18 @@ public:
     int luaClickCallback = -1;
     void addLuaClickCallback(int luaCallbackHandle);
     void removeLuaClickCallback();
+    
+    int _luaTouchBeginCallback = -1;
+    void addLuaTouchBeginCallback(int luaTouchBeginCallback);
+    void removeLuaTouchBeginCallback();
+    
+    int _luaTouchMoveCallback = -1;
+    void addLuaTouchMoveCallback(int luaTouchMoveCallback);
+    void removeLuaTouchMoveCallback();
+    
+    int _luaTouchEndCallback = -1;
+    void addLuaTouchEndCallback(int luaTouchEndCallback);
+    void removeLuaTouchEndCallback();
 
     virtual void constructFromResource();
     virtual GObject* hitTest(const cocos2d::Vec2 & worldPoint, const cocos2d::Camera * camera);

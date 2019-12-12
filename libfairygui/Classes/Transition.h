@@ -24,6 +24,10 @@ public:
     GComponent* getOwner() const { return _owner; }
     bool isPlaying() const { return _playing; }
 
+    //  add by miaotian
+    void playForLuaCallback(int luaCompleteCallback);
+    void playReverseForLuaCallback(int luaCompleteCallback);
+    
     void play(PlayCompleteCallback callback = nullptr);
     void play(int times, float delay, PlayCompleteCallback callback = nullptr);
     void play(int times, float delay, float startTime, float endTime, PlayCompleteCallback callback = nullptr);
@@ -68,6 +72,10 @@ private:
     void checkAllComplete();
     void applyValue(TransitionItem* item);
     void decodeValue(TransitionItem* item, ByteBuffer* buffer, void* value);
+    
+    //  add by miaotian
+    void removeLuaCompleteCallback();
+    void executeLuaCompleteCallback();
 
     GComponent* _owner;
     std::vector<TransitionItem*> _items;
@@ -87,6 +95,9 @@ private:
     float _timeScale;
     float _startTime;
     float _endTime;
+    
+    //  add by miaotian,缓存动画播放完的回调
+    int _luaCompleteCallback = -1;
 };
 
 NS_FGUI_END

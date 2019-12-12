@@ -3,6 +3,7 @@
 #include "GRoot.h"
 #include "tween/GTween.h"
 #include "utils/ByteBuffer.h"
+#include "CCLuaEngine.h"
 
 NS_FGUI_BEGIN
 USING_NS_CC;
@@ -257,6 +258,7 @@ Transition::~Transition()
 
     _playing = false;
     _onComplete = nullptr;
+    this->removeLuaCompleteCallback();
 }
 
 void Transition::play(PlayCompleteCallback callback)
@@ -418,6 +420,10 @@ void Transition::stop(bool setToComplete, bool processCallback)
     }
     if (processCallback && func != nullptr)
         func();
+    if (processCallback && _luaCompleteCallback != -1)
+    {
+        this->executeLuaCompleteCallback();
+    }
 }
 
 void Transition::stopItem(TransitionItem * item, bool setToComplete)
@@ -729,6 +735,10 @@ void Transition::onDelayedPlay()
         PlayCompleteCallback func = _onComplete;
         _onComplete = nullptr;
         func();
+    }
+    else if (_luaCompleteCallback != -1)
+    {
+        this->executeLuaCompleteCallback();
     }
 }
 
@@ -1135,6 +1145,10 @@ void Transition::checkAllComplete()
                     _onComplete = nullptr;
                     func();
                 }
+                if (_luaCompleteCallback != -1)
+                {
+                    this->executeLuaCompleteCallback();
+                }
             }
         }
     }
@@ -1420,6 +1434,41 @@ void Transition::decodeValue(TransitionItem* item, ByteBuffer * buffer, void* va
 
     default:
         break;
+    }
+}
+
+//  add by miaotian
+void Transition::playForLuaCallback(int luaCompleteCallback)
+{
+    this->removeLuaCompleteCallback();
+    _luaCompleteCallback = luaCompleteCallback;
+    this->play();
+}
+
+void Transition::playReverseForLuaCallback(int luaCompleteCallback)
+{
+    this->removeLuaCompleteCallback();
+    _luaCompleteCallback = luaCompleteCallback;
+    this->playReverse();
+}
+
+void Transition::removeLuaCompleteCallback()
+{
+    if (_luaCompleteCallback != -1) {
+        auto engine = LuaEngine::getInstance();
+        LuaStack* stack = engine->getLuaStack();
+        stack->removeScriptHandler(_luaCompleteCallback);
+        _luaCompleteCallback = -1;
+    }
+}
+
+void Transition::executeLuaCompleteCallback()
+{
+    if (_luaCompleteCallback != -1) {
+        auto engine = LuaEngine::getInstance();
+        LuaStack* stack = engine->getLuaStack();
+        stack->executeFunctionByHandler(_luaCompleteCallback, 0);
+        this->removeLuaCompleteCallback();
     }
 }
 

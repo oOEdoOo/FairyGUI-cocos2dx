@@ -69,6 +69,9 @@ GObject::~GObject()
     removeFromParent();
 
     removeLuaClickCallback();
+    removeLuaTouchBeginCallback();
+    removeLuaTouchMoveCallback();
+    removeLuaTouchEndCallback();
 
     if (_displayObject)
     {
@@ -1040,6 +1043,78 @@ void GObject::removeLuaClickCallback()
         luaClickCallback = -1;
         
         removeEventListener(UIEventType::Click, EventTag(this));
+    }
+}
+
+void GObject::addLuaTouchBeginCallback(int luaTouchBeginCallback)
+{
+    this->removeLuaTouchBeginCallback();
+    _luaTouchBeginCallback = luaTouchBeginCallback;
+    addEventListener(UIEventType::TouchBegin, [this](EventContext* context){
+        auto engine = LuaEngine::getInstance();
+        LuaStack* stack = engine->getLuaStack();
+        stack->pushObject(context->getInput()->getTouch(), "cc.Touch");
+        stack->executeFunctionByHandler(_luaTouchBeginCallback, 1);
+        context->captureTouch();
+    }, EventTag(this));
+}
+
+void GObject::removeLuaTouchBeginCallback()
+{
+    if (_luaTouchBeginCallback != -1) {
+        auto engine = LuaEngine::getInstance();
+        LuaStack* stack = engine->getLuaStack();
+        stack->removeScriptHandler(_luaTouchBeginCallback);
+        removeEventListener(UIEventType::TouchBegin, EventTag(this));
+    }
+}
+
+void GObject::addLuaTouchMoveCallback(int luaTouchMoveCallback)
+{
+    this->removeLuaTouchMoveCallback();
+    _luaTouchMoveCallback = luaTouchMoveCallback;
+    addEventListener(UIEventType::TouchMove, [this](EventContext* context){
+        auto engine = LuaEngine::getInstance();
+        LuaStack* stack = engine->getLuaStack();
+        auto touch = context->getInput()->getTouch();
+        if (touch == nullptr) {
+            stack->executeFunctionByHandler(_luaTouchMoveCallback, 0);
+        } else {
+            stack->pushObject(context->getInput()->getTouch(), "cc.Touch");
+            stack->executeFunctionByHandler(_luaTouchMoveCallback, 1);
+        }
+    }, EventTag(this));
+}
+
+void GObject::removeLuaTouchMoveCallback()
+{
+    if (_luaTouchMoveCallback != -1) {
+        auto engine = LuaEngine::getInstance();
+        LuaStack* stack = engine->getLuaStack();
+        stack->removeScriptHandler(_luaTouchMoveCallback);
+        removeEventListener(UIEventType::TouchBegin, EventTag(this));
+    }
+}
+
+void GObject::addLuaTouchEndCallback(int luaTouchEndCallback)
+{
+    this->removeLuaTouchEndCallback();
+    _luaTouchEndCallback = luaTouchEndCallback;
+    addEventListener(UIEventType::TouchEnd, [this](EventContext* context){
+        auto engine = LuaEngine::getInstance();
+        LuaStack* stack = engine->getLuaStack();
+        stack->pushObject(context->getInput()->getTouch(), "cc.Touch");
+        stack->executeFunctionByHandler(_luaTouchEndCallback, 1);
+    }, EventTag(this));
+}
+
+void GObject::removeLuaTouchEndCallback()
+{
+    if (_luaTouchEndCallback != -1) {
+        auto engine = LuaEngine::getInstance();
+        LuaStack* stack = engine->getLuaStack();
+        stack->removeScriptHandler(_luaTouchEndCallback);
+        removeEventListener(UIEventType::TouchEnd, EventTag(this));
     }
 }
 
