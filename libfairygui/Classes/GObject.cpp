@@ -2,18 +2,13 @@
 #include "GGroup.h"
 #include "GList.h"
 #include "GRoot.h"
-#include "UIPackage.h"
 #include "UIConfig.h"
-#include "gears/GearXY.h"
-#include "gears/GearSize.h"
-#include "gears/GearColor.h"
-#include "gears/GearAnimation.h"
-#include "gears/GearLook.h"
-#include "gears/GearText.h"
-#include "gears/GearIcon.h"
-#include "utils/WeakPtr.h"
-#include "utils/ByteBuffer.h"
+#include "UIPackage.h"
 #include "display/FUISprite.h"
+#include "gears/GearDisplay.h"
+#include "gears/GearDisplay2.h"
+#include "utils/ByteBuffer.h"
+#include "utils/WeakPtr.h"
 #include "CCLuaEngine.h"
 
 NS_FGUI_BEGIN
@@ -25,36 +20,34 @@ static Vec2 sGlobalDragStart;
 static Rect sGlobalRect;
 static bool sUpdateInDragging;
 
-GObject::GObject() :
-    _scale{ 1,1 },
-    _sizePercentInGroup(0.0f),
-    _pivotAsAnchor(false),
-    _alpha(1.0f),
-    _rotation(0.0f),
-    _visible(true),
-    _internalVisible(true),
-    _handlingController(false),
-    _touchable(true),
-    _grayed(false),
-    _finalGrayed(false),
-    _draggable(false),
-    _dragBounds(nullptr),
-    _dragTesting(false),
-    _sortingOrder(0),
-    _focusable(false),
-    _pixelSnapping(false),
-    _group(nullptr),
-    _parent(nullptr),
-    _displayObject(nullptr),
-    _sizeImplType(0),
-    _underConstruct(false),
-    _gearLocked(false),
-    _gears{ nullptr, nullptr, nullptr, nullptr, nullptr, nullptr, nullptr, nullptr },
-    _packageItem(nullptr),
-    _data(nullptr),
-    _touchDisabled(false),
-    _alignToBL(false),
-    _weakPtrRef(0)
+GObject::GObject() : _scale{1, 1},
+                     _sizePercentInGroup(0.0f),
+                     _pivotAsAnchor(false),
+                     _alpha(1.0f),
+                     _rotation(0.0f),
+                     _visible(true),
+                     _internalVisible(true),
+                     _handlingController(false),
+                     _touchable(true),
+                     _grayed(false),
+                     _finalGrayed(false),
+                     _draggable(false),
+                     _dragBounds(nullptr),
+                     _dragTesting(false),
+                     _sortingOrder(0),
+                     _focusable(false),
+                     _pixelSnapping(false),
+                     _group(nullptr),
+                     _parent(nullptr),
+                     _displayObject(nullptr),
+                     _sizeImplType(0),
+                     _underConstruct(false),
+                     _gearLocked(false),
+                     _packageItem(nullptr),
+                     _data(nullptr),
+                     _touchDisabled(false),
+                     _alignToBL(false),
+                     _weakPtrRef(0)
 {
     static uint64_t _gInstanceCounter = 1;
     _uid = _gInstanceCounter++;
@@ -62,6 +55,9 @@ GObject::GObject() :
     ss << _uid;
     id = ss.str();
     _relations = new Relations(this);
+
+    for (int i = 0; i < 10; i++)
+        _gears[i] = nullptr;
 }
 
 GObject::~GObject()
@@ -78,7 +74,7 @@ GObject::~GObject()
         _displayObject->removeFromParent();
         CC_SAFE_RELEASE(_displayObject);
     }
-    for (int i = 0; i < 8; i++)
+    for (int i = 0; i < 10; i++)
         CC_SAFE_DELETE(_gears[i]);
     CC_SAFE_DELETE(_relations);
     CC_SAFE_DELETE(_dragBounds);
@@ -132,7 +128,7 @@ void GObject::setPosition(float xv, float yv)
         {
             _parent->setBoundsChangedFlag();
             if (_group != nullptr)
-                _group->setBoundsChangedFlag();
+                _group->setBoundsChangedFlag(true);
 
             dispatchEvent(UIEventType::PositionChange);
         }
@@ -224,7 +220,7 @@ void GObject::setSize(float wv, float hv, bool ignorePivot /*= false*/)
             _relations->onOwnerSizeChanged(dWidth, dHeight, _pivotAsAnchor || !ignorePivot);
             _parent->setBoundsChangedFlag();
             if (_group != nullptr)
-                _group->setBoundsChangedFlag(true);
+                _group->setBoundsChangedFlag();
         }
 
         dispatchEvent(UIEventType::SizeChange);
@@ -336,6 +332,8 @@ void GObject::setVisible(bool value)
         handleVisibleChanged();
         if (_parent != nullptr)
             _parent->setBoundsChangedFlag();
+        if (_group != nullptr && _group->isExcludeInvisibles())
+            _group->setBoundsChangedFlag();
     }
 }
 
@@ -347,6 +345,11 @@ bool GObject::internalVisible() const
 bool GObject::internalVisible2() const
 {
     return _visible && (_group == nullptr || _group->internalVisible2());
+}
+
+bool GObject::internalVisible3() const
+{
+    return _visible && _internalVisible;
 }
 
 void GObject::setTouchable(bool value)
@@ -367,15 +370,15 @@ void GObject::setSortingOrder(int value)
     }
 }
 
-void GObject::setGroup(GGroup * value)
+void GObject::setGroup(GGroup* value)
 {
     if (_group != value)
     {
         if (_group != nullptr)
-            _group->setBoundsChangedFlag(true);
+            _group->setBoundsChangedFlag();
         _group = value;
         if (_group != nullptr)
-            _group->setBoundsChangedFlag(true);
+            _group->setBoundsChangedFlag();
         handleVisibleChanged();
         if (_parent)
             _parent->childStateChanged(this);
@@ -387,20 +390,20 @@ const std::string& GObject::getText() const
     return STD_STRING_EMPTY;
 }
 
-void GObject::setText(const std::string & text)
+void GObject::setText(const std::string& text)
 {
 }
 
-const std::string & GObject::getIcon() const
+const std::string& GObject::getIcon() const
 {
     return STD_STRING_EMPTY;
 }
 
-void GObject::setIcon(const std::string & text)
+void GObject::setIcon(const std::string& text)
 {
 }
 
-void GObject::setTooltips(const std::string & value)
+void GObject::setTooltips(const std::string& value)
 {
     _tooltips = value;
     if (!_tooltips.empty())
@@ -429,7 +432,7 @@ void GObject::setDraggable(bool value)
     }
 }
 
-void GObject::setDragBounds(const cocos2d::Rect & value)
+void GObject::setDragBounds(const cocos2d::Rect& value)
 {
     if (_dragBounds == nullptr)
         _dragBounds = new Rect();
@@ -454,13 +457,13 @@ std::string GObject::getResourceURL() const
         return STD_STRING_EMPTY;
 }
 
-Vec2 GObject::localToGlobal(const Vec2 & pt)
+Vec2 GObject::localToGlobal(const Vec2& pt)
 {
     Vec2 pt2 = pt;
     if (_pivotAsAnchor)
     {
-        pt2.x += _size.width*_pivot.x;
-        pt2.y += _size.height*_pivot.y;
+        pt2.x += _size.width * _pivot.x;
+        pt2.y += _size.height * _pivot.y;
     }
     pt2.y = _size.height - pt2.y;
     pt2 = _displayObject->convertToWorldSpace(pt2);
@@ -468,7 +471,7 @@ Vec2 GObject::localToGlobal(const Vec2 & pt)
     return pt2;
 }
 
-cocos2d::Rect GObject::localToGlobal(const cocos2d::Rect & rect)
+cocos2d::Rect GObject::localToGlobal(const cocos2d::Rect& rect)
 {
     Rect ret;
     Vec2 v = localToGlobal(rect.origin);
@@ -480,7 +483,7 @@ cocos2d::Rect GObject::localToGlobal(const cocos2d::Rect & rect)
     return ret;
 }
 
-Vec2 GObject::globalToLocal(const Vec2 & pt)
+Vec2 GObject::globalToLocal(const Vec2& pt)
 {
     Vec2 pt2 = pt;
     pt2.y = UIRoot->getHeight() - pt2.y;
@@ -488,13 +491,13 @@ Vec2 GObject::globalToLocal(const Vec2 & pt)
     pt2.y = _size.height - pt2.y;
     if (_pivotAsAnchor)
     {
-        pt2.x -= _size.width*_pivot.x;
-        pt2.y -= _size.height*_pivot.y;
+        pt2.x -= _size.width * _pivot.x;
+        pt2.y -= _size.height * _pivot.y;
     }
     return pt2;
 }
 
-cocos2d::Rect GObject::globalToLocal(const cocos2d::Rect & rect)
+cocos2d::Rect GObject::globalToLocal(const cocos2d::Rect& rect)
 {
     Rect ret;
     Vec2 v = globalToLocal(rect.origin);
@@ -506,7 +509,7 @@ cocos2d::Rect GObject::globalToLocal(const cocos2d::Rect & rect)
     return ret;
 }
 
-cocos2d::Rect GObject::transformRect(const cocos2d::Rect& rect, GObject * targetSpace)
+cocos2d::Rect GObject::transformRect(const cocos2d::Rect& rect, GObject* targetSpace)
 {
     if (targetSpace == this)
         return rect;
@@ -514,13 +517,13 @@ cocos2d::Rect GObject::transformRect(const cocos2d::Rect& rect, GObject * target
     if (targetSpace == _parent) // optimization
     {
         return Rect((_position.x + rect.origin.x) * _scale.x,
-            (_position.y + rect.origin.y) * _scale.y,
-            rect.size.width * _scale.x,
-            rect.size.height * _scale.y);
+                    (_position.y + rect.origin.y) * _scale.y,
+                    rect.size.width * _scale.x,
+                    rect.size.height * _scale.y);
     }
     else
     {
-        float result[4]{ FLT_MAX, FLT_MAX, -FLT_MAX, -FLT_MAX };
+        float result[4]{FLT_MAX, FLT_MAX, -FLT_MAX, -FLT_MAX};
 
         transformRectPoint(rect.origin, result, targetSpace);
         transformRectPoint(Vec2(rect.getMaxX(), rect.origin.y), result, targetSpace);
@@ -537,18 +540,22 @@ void GObject::transformRectPoint(const Vec2& pt, float rect[], GObject* targetSp
     if (targetSpace != nullptr)
         v = targetSpace->globalToLocal(v);
 
-    if (rect[0] > v.x) rect[0] = v.x;
-    if (rect[2] < v.x) rect[2] = v.x;
-    if (rect[1] > v.y) rect[1] = v.y;
-    if (rect[3] < v.y) rect[3] = v.y;
+    if (rect[0] > v.x)
+        rect[0] = v.x;
+    if (rect[2] < v.x)
+        rect[2] = v.x;
+    if (rect[1] > v.y)
+        rect[1] = v.y;
+    if (rect[3] < v.y)
+        rect[3] = v.y;
 }
 
-void GObject::addRelation(GObject * target, RelationType relationType, bool usePercent)
+void GObject::addRelation(GObject* target, RelationType relationType, bool usePercent)
 {
     _relations->add(target, relationType, usePercent);
 }
 
-void GObject::removeRelation(GObject * target, RelationType relationType)
+void GObject::removeRelation(GObject* target, RelationType relationType)
 {
     _relations->remove(target, relationType);
 }
@@ -558,33 +565,7 @@ GearBase* GObject::getGear(int index)
     GearBase* gear = _gears[index];
     if (gear == nullptr)
     {
-        switch (index)
-        {
-        case 0:
-            gear = new GearDisplay(this);
-            break;
-        case 1:
-            gear = new GearXY(this);
-            break;
-        case 2:
-            gear = new GearSize(this);
-            break;
-        case 3:
-            gear = new GearLook(this);
-            break;
-        case 4:
-            gear = new GearColor(this);
-            break;
-        case 5:
-            gear = new GearAnimation(this);
-            break;
-        case 6:
-            gear = new GearText(this);
-            break;
-        case 7:
-            gear = new GearIcon(this);
-            break;
-        }
+        gear = GearBase::create(this, index);
         _gears[index] = gear;
     }
     return gear;
@@ -641,11 +622,16 @@ void GObject::checkGearDisplay()
         return;
 
     bool connected = _gears[0] == nullptr || ((GearDisplay*)_gears[0])->isConnected();
+    if (_gears[8] != nullptr)
+        connected = dynamic_cast<GearDisplay2*>(_gears[8])->evaluate(connected);
+
     if (connected != _internalVisible)
     {
         _internalVisible = connected;
         if (_parent != nullptr)
             _parent->childStateChanged(this);
+        if (_group != nullptr && _group->isExcludeInvisibles())
+            _group->setBoundsChangedFlag();
     }
 }
 
@@ -659,12 +645,12 @@ GObject* GObject::findParent() const
     if (_parent != nullptr)
         return _parent;
 
-    //������Щ��ֱ����children���node���ŵ�
     Node* pn = _displayObject->getParent();
     if (pn == nullptr)
         return nullptr;
 
-    while (pn != nullptr) {
+    while (pn != nullptr)
+    {
         FUIContainer* fc = dynamic_cast<FUIContainer*>(pn);
         if (fc != nullptr && fc->gOwner)
             return fc->gOwner;
@@ -694,11 +680,37 @@ void GObject::removeFromParent()
         _parent->removeChild(this);
 }
 
+cocos2d::Value GObject::getProp(ObjectPropID propId)
+{
+    switch (propId)
+    {
+    case ObjectPropID::Text:
+        return Value(getText());
+    case ObjectPropID::Icon:
+        return Value(getIcon());
+    default:
+        return Value::Null;
+    }
+}
+
+void GObject::setProp(ObjectPropID propId, const cocos2d::Value& value)
+{
+    switch (propId)
+    {
+    case ObjectPropID::Text:
+        return setText(value.asString());
+    case ObjectPropID::Icon:
+        return setIcon(value.asString());
+    default:
+        break;
+    }
+}
+
 void GObject::constructFromResource()
 {
 }
 
-GObject* GObject::hitTest(const Vec2 &worldPoint, const Camera* camera)
+GObject* GObject::hitTest(const Vec2& worldPoint, const Camera* camera)
 {
     if (_touchDisabled || !_touchable || !_displayObject->isVisible() || !_displayObject->getParent())
         return nullptr;
@@ -789,10 +801,10 @@ void GObject::handleVisibleChanged()
     _displayObject->setVisible(internalVisible2());
 }
 
-void GObject::handleControllerChanged(GController * c)
+void GObject::handleControllerChanged(GController* c)
 {
     _handlingController = true;
-    for (int i = 0; i < 8; i++)
+    for (int i = 0; i < 10; i++)
     {
         GearBase* gear = _gears[i];
         if (gear != nullptr && gear->getController() == c)
@@ -805,98 +817,98 @@ void GObject::handleControllerChanged(GController * c)
 
 void GObject::setup_beforeAdd(ByteBuffer* buffer, int beginPos)
 {
-    buffer->Seek(beginPos, 0);
-    buffer->Skip(5);
+    buffer->seek(beginPos, 0);
+    buffer->skip(5);
 
-    id = buffer->ReadS();
-    name = buffer->ReadS();
-    float f1 = buffer->ReadInt();
-    float f2 = buffer->ReadInt();
+    id = buffer->readS();
+    name = buffer->readS();
+    float f1 = buffer->readInt();
+    float f2 = buffer->readInt();
     setPosition(f1, f2);
 
-    if (buffer->ReadBool())
+    if (buffer->readBool())
     {
-        initSize.width = buffer->ReadInt();
-        initSize.height = buffer->ReadInt();
+        initSize.width = buffer->readInt();
+        initSize.height = buffer->readInt();
         setSize(initSize.width, initSize.height, true);
     }
 
-    if (buffer->ReadBool())
+    if (buffer->readBool())
     {
-        minSize.width = buffer->ReadInt();
-        maxSize.width = buffer->ReadInt();
-        minSize.height = buffer->ReadInt();
-        maxSize.height = buffer->ReadInt();
+        minSize.width = buffer->readInt();
+        maxSize.width = buffer->readInt();
+        minSize.height = buffer->readInt();
+        maxSize.height = buffer->readInt();
     }
 
-    if (buffer->ReadBool())
+    if (buffer->readBool())
     {
-        f1 = buffer->ReadFloat();
-        f2 = buffer->ReadFloat();
+        f1 = buffer->readFloat();
+        f2 = buffer->readFloat();
         setScale(f1, f2);
     }
 
-    if (buffer->ReadBool())
+    if (buffer->readBool())
     {
-        f1 = buffer->ReadFloat();
-        f2 = buffer->ReadFloat();
+        f1 = buffer->readFloat();
+        f2 = buffer->readFloat();
         setSkewX(f1);
         setSkewY(f2);
     }
 
-    if (buffer->ReadBool())
+    if (buffer->readBool())
     {
-        f1 = buffer->ReadFloat();
-        f2 = buffer->ReadFloat();
-        setPivot(f1, f2, buffer->ReadBool());
+        f1 = buffer->readFloat();
+        f2 = buffer->readFloat();
+        setPivot(f1, f2, buffer->readBool());
     }
 
-    f1 = buffer->ReadFloat();
+    f1 = buffer->readFloat();
     if (f1 != 1)
         setAlpha(f1);
 
-    f1 = buffer->ReadFloat();
+    f1 = buffer->readFloat();
     if (f1 != 0)
         setRotation(f1);
 
-    if (!buffer->ReadBool())
+    if (!buffer->readBool())
         setVisible(false);
-    if (!buffer->ReadBool())
+    if (!buffer->readBool())
         setTouchable(false);
-    if (buffer->ReadBool())
+    if (buffer->readBool())
         setGrayed(true);
-    buffer->ReadByte(); //blendMode
-    buffer->ReadByte(); //filter
+    buffer->readByte(); //blendMode
+    buffer->readByte(); //filter
 
-    const std::string& str = buffer->ReadS();
+    const std::string& str = buffer->readS();
     if (!str.empty())
         _customData = Value(str);
 }
 
 void GObject::setup_afterAdd(ByteBuffer* buffer, int beginPos)
 {
-    buffer->Seek(beginPos, 1);
+    buffer->seek(beginPos, 1);
 
-    const std::string& str = buffer->ReadS();
+    const std::string& str = buffer->readS();
     if (!str.empty())
         setTooltips(str);
 
-    int groupId = buffer->ReadShort();
+    int groupId = buffer->readShort();
     if (groupId >= 0)
         _group = dynamic_cast<GGroup*>(_parent->getChildAt(groupId));
 
-    buffer->Seek(beginPos, 2);
+    buffer->seek(beginPos, 2);
 
-    int cnt = buffer->ReadShort();
+    int cnt = buffer->readShort();
     for (int i = 0; i < cnt; i++)
     {
-        int nextPos = buffer->ReadShort();
-        nextPos += buffer->position;
+        int nextPos = buffer->readShort();
+        nextPos += buffer->getPos();
 
-        GearBase* gear = getGear(buffer->ReadByte());
+        GearBase* gear = getGear(buffer->readByte());
         gear->setup(buffer);
 
-        buffer->position = nextPos;
+        buffer->setPos(nextPos);
     }
 }
 
@@ -965,8 +977,7 @@ void GObject::onTouchMove(EventContext* context)
 #else
         sensitivity = UIConfig::touchDragSensitivity;
 #endif
-        if (std::abs(_dragTouchStartPos.x - evt->getPosition().x) < sensitivity
-            && std::abs(_dragTouchStartPos.y - evt->getPosition().y) < sensitivity)
+        if (std::abs(_dragTouchStartPos.x - evt->getPosition().x) < sensitivity && std::abs(_dragTouchStartPos.y - evt->getPosition().y) < sensitivity)
             return;
 
         _dragTesting = false;

@@ -1,9 +1,12 @@
 #include "Transition.h"
 #include "GComponent.h"
 #include "GRoot.h"
+#include "tween/GPath.h"
 #include "tween/GTween.h"
 #include "utils/ByteBuffer.h"
+#include "utils/ToolSet.h"
 #include "CCLuaEngine.h"
+
 
 NS_FGUI_BEGIN
 USING_NS_CC;
@@ -13,13 +16,17 @@ const int OPTION_IGNORE_DISPLAY_CONTROLLER = 1;
 const int OPTION_AUTO_STOP_DISABLED = 2;
 const int OPTION_AUTO_STOP_AT_END = 4;
 
-class TValue_Visible
+class TValueBase
+{
+};
+
+class TValue_Visible : public TValueBase
 {
 public:
     bool visible;
 };
 
-class TValue_Animation
+class TValue_Animation : public TValueBase
 {
 public:
     int frame;
@@ -27,14 +34,14 @@ public:
     bool flag;
 };
 
-class TValue_Sound
+class TValue_Sound : public TValueBase
 {
 public:
     std::string sound;
     float volume;
 };
 
-class TValue_Transition
+class TValue_Transition : public TValueBase
 {
 public:
     std::string transName;
@@ -43,7 +50,7 @@ public:
     float stopTime;
 };
 
-class TValue_Shake
+class TValue_Shake : public TValueBase
 {
 public:
     float amplitude;
@@ -52,13 +59,13 @@ public:
     cocos2d::Vec2 offset;
 };
 
-class TValue_Text
+class TValue_Text : public TValueBase
 {
 public:
     std::string text;
 };
 
-class TValue
+class TValue : public TValueBase
 {
 public:
     float f1;
@@ -67,6 +74,7 @@ public:
     float f4;
     bool b1;
     bool b2;
+    bool b3;
 
     TValue();
     cocos2d::Vec2 getVec2() const;
@@ -81,6 +89,7 @@ TValue::TValue()
 {
     f1 = f2 = f3 = f4 = 0;
     b1 = b2 = true;
+    b3 = false;
 }
 
 cocos2d::Vec2 TValue::getVec2() const
@@ -88,7 +97,7 @@ cocos2d::Vec2 TValue::getVec2() const
     return cocos2d::Vec2(f1, f2);
 }
 
-void TValue::setVec2(const cocos2d::Vec2 & value)
+void TValue::setVec2(const cocos2d::Vec2& value)
 {
     f1 = value.x;
     f2 = value.y;
@@ -99,7 +108,7 @@ cocos2d::Vec4 TValue::getVec4() const
     return cocos2d::Vec4(f1, f2, f3, f4);
 }
 
-void TValue::setVec4(const cocos2d::Vec4 & value)
+void TValue::setVec4(const cocos2d::Vec4& value)
 {
     f1 = value.x;
     f2 = value.y;
@@ -112,7 +121,7 @@ cocos2d::Color4B TValue::getColor() const
     return cocos2d::Color4B(f1, f2, f3, f4);
 }
 
-void TValue::setColor(const cocos2d::Color4B & value)
+void TValue::setColor(const cocos2d::Color4B& value)
 {
     f1 = value.r;
     f2 = value.g;
@@ -130,18 +139,30 @@ public:
 
     TValue* startValue;
     TValue* endValue;
+    GPath* path;
 
     string endLabel;
     Transition::TransitionHook endHook;
 
     TweenConfig();
+    ~TweenConfig();
 };
 
 TweenConfig::TweenConfig()
+    : startValue(nullptr),
+    endValue(nullptr),
+    path(nullptr)
 {
     easeType = EaseType::QuadOut;
     startValue = new TValue();
     endValue = new TValue();
+}
+
+TweenConfig::~TweenConfig()
+{
+    CC_SAFE_DELETE(path);
+    CC_SAFE_DELETE(startValue);
+    CC_SAFE_DELETE(endValue);
 }
 
 class TransitionItem
@@ -152,7 +173,7 @@ public:
     TransitionActionType type;
     TweenConfig* tweenConfig;
     string label;
-    void* value;
+    TValueBase* value;
     Transition::TransitionHook hook;
 
     //running properties
@@ -161,10 +182,11 @@ public:
     uint32_t displayLockToken;
 
     TransitionItem(TransitionActionType aType);
+    ~TransitionItem();
 };
 
-TransitionItem::TransitionItem(TransitionActionType aType) :
-    time(0),
+TransitionItem::TransitionItem(TransitionActionType aType)
+    : time(0),
     type(aType),
     hook(nullptr),
     tweenConfig(nullptr),
@@ -217,8 +239,27 @@ TransitionItem::TransitionItem(TransitionActionType aType) :
     }
 }
 
-Transition::Transition(GComponent* owner) :
-    _owner(owner),
+TransitionItem::~TransitionItem()
+{
+    if (tweener != nullptr)
+    {
+        tweener->kill();
+        tweener = nullptr;
+    }
+
+    target = nullptr;
+    hook = nullptr;
+    if (tweenConfig != nullptr)
+    {
+        tweenConfig->endHook = nullptr;
+        delete tweenConfig;
+    }
+
+    CC_SAFE_DELETE(value);
+}
+
+Transition::Transition(GComponent* owner)
+    : _owner(owner),
     _totalTimes(0),
     _totalTasks(0),
     _playing(false),
@@ -240,21 +281,10 @@ Transition::Transition(GComponent* owner) :
 Transition::~Transition()
 {
     if (_playing)
-        GTween::kill(this);//delay start
+        GTween::kill(this); //delay start
 
-    for (auto &item : _items)
-    {
-        if (item->tweener != nullptr)
-        {
-            item->tweener->kill();
-            item->tweener = nullptr;
-        }
-
-        item->target = nullptr;
-        item->hook = nullptr;
-        if (item->tweenConfig != nullptr)
-            item->tweenConfig->endHook = nullptr;
-    }
+    for (auto& item : _items)
+        delete item;
 
     _playing = false;
     _onComplete = nullptr;
@@ -411,7 +441,7 @@ void Transition::stop(bool setToComplete, bool processCallback)
     {
         for (int i = 0; i < cnt; i++)
         {
-            TransitionItem *item = _items[i];
+            TransitionItem* item = _items[i];
             if (item->target == nullptr)
                 continue;
 
@@ -426,7 +456,7 @@ void Transition::stop(bool setToComplete, bool processCallback)
     }
 }
 
-void Transition::stopItem(TransitionItem * item, bool setToComplete)
+void Transition::stopItem(TransitionItem* item, bool setToComplete)
 {
     if (item->displayLockToken != 0)
     {
@@ -439,7 +469,7 @@ void Transition::stopItem(TransitionItem * item, bool setToComplete)
         item->tweener->kill(setToComplete);
         item->tweener = nullptr;
 
-        if (item->type == TransitionActionType::Shake && !setToComplete) //震动必须归位，否则下次就越震越远了。
+        if (item->type == TransitionActionType::Shake && !setToComplete)
         {
             item->target->_gearLocked = true;
             item->target->setPosition(item->target->getX() - ((TValue_Shake*)item->value)->lastOffset.x, item->target->getY() - ((TValue_Shake*)item->value)->lastOffset.y);
@@ -458,7 +488,7 @@ void Transition::setPaused(bool paused)
     if (tweener != nullptr)
         tweener->setPaused(paused);
 
-    for (auto &item : _items)
+    for (auto& item : _items)
     {
         if (item->target == nullptr)
             continue;
@@ -472,11 +502,11 @@ void Transition::setPaused(bool paused)
         {
             if (paused)
             {
-                ((TValue_Animation*)item->value)->flag = (dynamic_cast<IAnimationGear*>(item->target))->isPlaying();
-                (dynamic_cast<IAnimationGear*>(item->target))->setPlaying(false);
+                ((TValue_Animation*)item->value)->flag = item->target->getProp(ObjectPropID::Playing).asBool();
+                item->target->setProp(ObjectPropID::Playing, Value(false));
             }
             else
-                (dynamic_cast<IAnimationGear*>(item->target))->setPlaying(((TValue_Animation*)item->value)->flag);
+                item->target->setProp(ObjectPropID::Playing, Value(((TValue_Animation*)item->value)->flag));
         }
 
         if (item->tweener != nullptr)
@@ -484,9 +514,9 @@ void Transition::setPaused(bool paused)
     }
 }
 
-void Transition::setValue(const std::string & label, const ValueVector& values)
+void Transition::setValue(const std::string& label, const ValueVector& values)
 {
-    for (auto &item : _items)
+    for (auto& item : _items)
     {
         void* value;
         if (item->label == label)
@@ -521,7 +551,8 @@ void Transition::setValue(const std::string & label, const ValueVector& values)
 
         case TransitionActionType::Alpha:
         case TransitionActionType::Rotation:
-            ((TValue*)value)->f1 = values[0].asFloat();;
+            ((TValue*)value)->f1 = values[0].asFloat();
+            ;
             break;
 
         case TransitionActionType::Color:
@@ -590,9 +621,9 @@ void Transition::setValue(const std::string & label, const ValueVector& values)
     }
 }
 
-void Transition::setHook(const std::string & label, TransitionHook callback)
+void Transition::setHook(const std::string& label, TransitionHook callback)
 {
-    for (auto &item : _items)
+    for (auto& item : _items)
     {
         if (item->label == label)
         {
@@ -609,7 +640,7 @@ void Transition::setHook(const std::string & label, TransitionHook callback)
 
 void Transition::clearHooks()
 {
-    for (auto &item : _items)
+    for (auto& item : _items)
     {
         item->hook = nullptr;
         if (item->tweenConfig != nullptr)
@@ -617,9 +648,9 @@ void Transition::clearHooks()
     }
 }
 
-void Transition::setTarget(const std::string & label, GObject * newTarget)
+void Transition::setTarget(const std::string& label, GObject* newTarget)
 {
-    for (auto &item : _items)
+    for (auto& item : _items)
     {
         if (item->label == label)
         {
@@ -630,9 +661,9 @@ void Transition::setTarget(const std::string & label, GObject * newTarget)
     }
 }
 
-void Transition::setDuration(const std::string & label, float value)
+void Transition::setDuration(const std::string& label, float value)
 {
-    for (auto &item : _items)
+    for (auto& item : _items)
     {
         if (item->tweenConfig != nullptr && item->label == label)
             item->tweenConfig->duration = value;
@@ -641,7 +672,7 @@ void Transition::setDuration(const std::string & label, float value)
 
 float Transition::getLabelTime(const string& label) const
 {
-    for (auto &item : _items)
+    for (auto& item : _items)
     {
         if (item->label == label)
             return item->time;
@@ -658,7 +689,7 @@ void Transition::setTimeScale(float value)
     {
         _timeScale = value;
 
-        for (auto &item : _items)
+        for (auto& item : _items)
         {
             if (item->tweener != nullptr)
                 item->tweener->setTimeScale(value);
@@ -670,19 +701,19 @@ void Transition::setTimeScale(float value)
             else if (item->type == TransitionActionType::Animation)
             {
                 if (item->target != nullptr)
-                    (dynamic_cast<IAnimationGear*>(item->target))->setTimeScale(value);
+                    item->target->setProp(ObjectPropID::TimeScale, Value(value));
             }
         }
     }
 }
 
-void Transition::updateFromRelations(const std::string & targetId, float dx, float dy)
+void Transition::updateFromRelations(const std::string& targetId, float dx, float dy)
 {
     int cnt = (int)_items.size();
     if (cnt == 0)
         return;
 
-    for (auto &item : _items)
+    for (auto& item : _items)
     {
         if (item->type == TransitionActionType::XY && item->targetId == targetId)
         {
@@ -723,7 +754,7 @@ void Transition::onDelayedPlay()
     {
         if ((_options & OPTION_IGNORE_DISPLAY_CONTROLLER) != 0)
         {
-            for (auto &item : _items)
+            for (auto& item : _items)
             {
                 if (item->target != nullptr && item->target != _owner)
                     item->displayLockToken = item->target->addDisplayLock();
@@ -911,8 +942,8 @@ void Transition::skipAnimations()
     int frame;
     float playStartTime;
     float playTotalTime;
+    GObject* target;
     TValue_Animation* value;
-    IAnimationGear* target;
     TransitionItem* item;
 
     int cnt = (int)_items.size();
@@ -926,15 +957,15 @@ void Transition::skipAnimations()
         if (value->flag)
             continue;
 
-        target = dynamic_cast<IAnimationGear*>(item->target);
-        frame = target->getFrame();
-        playStartTime = target->isPlaying() ? 0 : -1;
+        target = item->target;
+        frame = target->getProp(ObjectPropID::Frame).asInt();
+        playStartTime = target->getProp(ObjectPropID::Playing).asBool() ? 0 : -1;
         playTotalTime = 0;
 
         for (int j = i; j < cnt; j++)
         {
             item = _items[j];
-            if (item->type != TransitionActionType::Animation || item->target != (void*)target || item->time > _startTime)
+            if (item->type != TransitionActionType::Animation || item->target != target || item->time > _startTime)
                 continue;
 
             value = (TValue_Animation*)item->value;
@@ -970,10 +1001,10 @@ void Transition::skipAnimations()
         if (playStartTime >= 0)
             playTotalTime += (_startTime - playStartTime);
 
-        target->setPlaying(playStartTime >= 0);
-        target->setFrame(frame);
+        target->setProp(ObjectPropID::Playing, Value(playStartTime >= 0));
+        target->setProp(ObjectPropID::Frame, Value(frame));
         if (playTotalTime > 0)
-            target->advance(playTotalTime);
+            target->setProp(ObjectPropID::DeltaTime, Value(playTotalTime));
     }
 }
 
@@ -993,7 +1024,7 @@ void Transition::onTweenStart(GTweener* tweener)
 {
     TransitionItem* item = (TransitionItem*)tweener->getTarget();
 
-    if (item->type == TransitionActionType::XY || item->type == TransitionActionType::Size) //位置和大小要到start才最终确认起始值
+    if (item->type == TransitionActionType::XY || item->type == TransitionActionType::Size)
     {
         TValue* startValue;
         TValue* endValue;
@@ -1014,33 +1045,56 @@ void Transition::onTweenStart(GTweener* tweener)
             if (item->target != _owner)
             {
                 if (!startValue->b1)
-                    startValue->f1 = item->target->getX();
+                    tweener->startValue.x = item->target->getX();
+                else if (startValue->b3) //percent
+                    tweener->startValue.x = startValue->f1 * _owner->getWidth();
+
                 if (!startValue->b2)
-                    startValue->f2 = item->target->getY();
+                    tweener->startValue.y = item->target->getY();
+                else if (startValue->b3) //percent
+                    tweener->startValue.y = startValue->f2 * _owner->getHeight();
+
+                if (!endValue->b1)
+                    tweener->endValue.x = tweener->startValue.x;
+                else if (endValue->b3)
+                    tweener->endValue.x = endValue->f1 * _owner->getWidth();
+
+                if (!endValue->b2)
+                    tweener->endValue.y = tweener->startValue.y;
+                else if (endValue->b3)
+                    tweener->endValue.y = endValue->f2 * _owner->getHeight();
             }
             else
             {
                 if (!startValue->b1)
-                    startValue->f1 = item->target->getX() - _ownerBaseX;
+                    tweener->startValue.x = item->target->getX() - _ownerBaseX;
                 if (!startValue->b2)
-                    startValue->f2 = item->target->getY() - _ownerBaseY;
+                    tweener->startValue.y = item->target->getY() - _ownerBaseY;
+
+                if (!endValue->b1)
+                    tweener->endValue.x = tweener->startValue.x;
+                if (!endValue->b2)
+                    tweener->endValue.y = tweener->startValue.y;
             }
         }
         else
         {
             if (!startValue->b1)
-                startValue->f1 = item->target->getWidth();
+                tweener->startValue.x = item->target->getWidth();
             if (!startValue->b2)
-                startValue->f2 = item->target->getHeight();
+                tweener->startValue.y = item->target->getHeight();
+
+            if (!endValue->b1)
+                tweener->endValue.x = tweener->startValue.x;
+            if (!endValue->b2)
+                tweener->endValue.y = tweener->startValue.y;
         }
 
-        if (!endValue->b1)
-            endValue->f1 = startValue->f1;
-        if (!endValue->b2)
-            endValue->f2 = startValue->f2;
-
-        tweener->startValue.setVec2(startValue->getVec2());
-        tweener->endValue.setVec2(endValue->getVec2());
+        if (item->tweenConfig->path != nullptr)
+        {
+            ((TValue*)item->value)->b1 = ((TValue*)item->value)->b2 = true;
+            tweener->setPath(item->tweenConfig->path);
+        }
     }
 
     callHook(item, false);
@@ -1055,7 +1109,10 @@ void Transition::onTweenUpdate(GTweener* tweener)
     case TransitionActionType::Size:
     case TransitionActionType::Scale:
     case TransitionActionType::Skew:
-        ((TValue*)item->value)->setVec2(tweener->value.getVec2());
+        if (item->tweenConfig->path != nullptr)
+            ((TValue*)item->value)->setVec2(tweener->value.getVec2() + tweener->startValue.getVec2());
+        else
+            ((TValue*)item->value)->setVec2(tweener->value.getVec2());
         break;
 
     case TransitionActionType::Alpha:
@@ -1086,7 +1143,7 @@ void Transition::onTweenComplete(GTweener* tweener)
     item->tweener = nullptr;
     _totalTasks--;
 
-    if (tweener->allCompleted()) //当整体播放结束时间在这个tween的中间时不应该调用结尾钩子
+    if (tweener->allCompleted())
         callHook(item, true);
 
     checkAllComplete();
@@ -1130,7 +1187,7 @@ void Transition::checkAllComplete()
             {
                 _playing = false;
 
-                for (auto &item : _items)
+                for (auto& item : _items)
                 {
                     if (item->target != nullptr && item->displayLockToken != 0)
                     {
@@ -1165,24 +1222,33 @@ void Transition::applyValue(TransitionItem* item)
         TValue* value = (TValue*)item->value;
         if (item->target == _owner)
         {
-            float f1, f2;
-            if (!value->b1)
-                f1 = item->target->getX();
+            if (value->b1 && value->b2)
+                item->target->setPosition(value->f1 + _ownerBaseX, value->f2 + _ownerBaseY);
+            else if (value->b1)
+                item->target->setX(value->f1 + _ownerBaseX);
             else
-                f1 = value->f1 + _ownerBaseX;
-            if (!value->b2)
-                f2 = item->target->getY();
-            else
-                f2 = value->f2 + _ownerBaseY;
-            item->target->setPosition(f1, f2);
+                item->target->setY(value->f2 + _ownerBaseY);
         }
         else
         {
-            if (!value->b1)
-                value->f1 = item->target->getX();
-            if (!value->b2)
-                value->f2 = item->target->getY();
-            item->target->setPosition(value->f1, value->f2);
+            if (value->b3) //position in percent
+            {
+                if (value->b1 && value->b2)
+                    item->target->setPosition(value->f1 * _owner->getWidth(), value->f2 * _owner->getHeight());
+                else if (value->b1)
+                    item->target->setX(value->f1 * _owner->getWidth());
+                else if (value->b2)
+                    item->target->setY(value->f2 * _owner->getHeight());
+            }
+            else
+            {
+                if (value->b1 && value->b2)
+                    item->target->setPosition(value->f1, value->f2);
+                else if (value->b1)
+                    item->target->setX(value->f1);
+                else if (value->b2)
+                    item->target->setY(value->f2);
+            }
         }
     }
     break;
@@ -1220,19 +1286,18 @@ void Transition::applyValue(TransitionItem* item)
         break;
 
     case TransitionActionType::Color:
-        (dynamic_cast<IColorGear*>(item->target))->setColor((Color3B)((TValue*)item->value)->getColor());
+        item->target->setProp(ObjectPropID::Color, Value(ToolSet::colorToInt((Color3B)((TValue*)item->value)->getColor())));
         break;
 
     case TransitionActionType::Animation:
     {
         TValue_Animation* value = (TValue_Animation*)item->value;
-        IAnimationGear* target = (dynamic_cast<IAnimationGear*>(item->target));
         if (value->frame >= 0)
-            target->setFrame(value->frame);
-        target->setPlaying(value->playing);
-        target->setTimeScale(_timeScale);
+            item->target->setProp(ObjectPropID::Frame, Value(value->frame));
+        item->target->setProp(ObjectPropID::Playing, Value(value->playing));
+        item->target->setProp(ObjectPropID::TimeScale, Value(_timeScale));
+        break;
     }
-    break;
 
     case TransitionActionType::Visible:
         item->target->setVisible(((TValue_Visible*)item->value)->visible);
@@ -1243,8 +1308,8 @@ void Transition::applyValue(TransitionItem* item)
         TValue_Shake* value = (TValue_Shake*)item->value;
         item->target->setPosition(item->target->getX() - value->lastOffset.x + value->offset.x, item->target->getY() - value->lastOffset.y + value->offset.y);
         value->lastOffset = value->offset;
+        break;
     }
-    break;
 
     case TransitionActionType::Transition:
         if (_playing)
@@ -1290,69 +1355,117 @@ void Transition::applyValue(TransitionItem* item)
     item->target->_gearLocked = false;
 }
 
+static std::vector<GPathPoint> helperPoints;
+
 void Transition::setup(ByteBuffer* buffer)
 {
-    name = buffer->ReadS();
-    _options = buffer->ReadInt();
-    _autoPlay = buffer->ReadBool();
-    _autoPlayTimes = buffer->ReadInt();
-    _autoPlayDelay = buffer->ReadFloat();
+    name = buffer->readS();
+    _options = buffer->readInt();
+    _autoPlay = buffer->readBool();
+    _autoPlayTimes = buffer->readInt();
+    _autoPlayDelay = buffer->readFloat();
 
-    int cnt = buffer->ReadShort();
+    int cnt = buffer->readShort();
     for (int i = 0; i < cnt; i++)
     {
-        int dataLen = buffer->ReadShort();
-        int curPos = buffer->position;
+        int dataLen = buffer->readShort();
+        int curPos = buffer->getPos();
 
-        buffer->Seek(curPos, 0);
+        buffer->seek(curPos, 0);
 
-        TransitionItem* item = new TransitionItem((TransitionActionType)buffer->ReadByte());
+        TransitionItem* item = new TransitionItem((TransitionActionType)buffer->readByte());
         _items.push_back(item);
 
-        item->time = buffer->ReadFloat();
-        int targetId = buffer->ReadShort();
+        item->time = buffer->readFloat();
+        int targetId = buffer->readShort();
         if (targetId < 0)
             item->targetId = STD_STRING_EMPTY;
         else
             item->targetId = _owner->getChildAt(targetId)->id;
-        item->label = buffer->ReadS();
+        item->label = buffer->readS();
 
-        if (buffer->ReadBool())
+        if (buffer->readBool())
         {
-            buffer->Seek(curPos, 1);
+            buffer->seek(curPos, 1);
 
             item->tweenConfig = new TweenConfig();
-            item->tweenConfig->duration = buffer->ReadFloat();
+            item->tweenConfig->duration = buffer->readFloat();
             if (item->time + item->tweenConfig->duration > _totalDuration)
                 _totalDuration = item->time + item->tweenConfig->duration;
-            item->tweenConfig->easeType = (EaseType)buffer->ReadByte();
-            item->tweenConfig->repeat = buffer->ReadInt();
-            item->tweenConfig->yoyo = buffer->ReadBool();
-            item->tweenConfig->endLabel = buffer->ReadS();
+            item->tweenConfig->easeType = (EaseType)buffer->readByte();
+            item->tweenConfig->repeat = buffer->readInt();
+            item->tweenConfig->yoyo = buffer->readBool();
+            item->tweenConfig->endLabel = buffer->readS();
 
-            buffer->Seek(curPos, 2);
+            buffer->seek(curPos, 2);
 
             decodeValue(item, buffer, item->tweenConfig->startValue);
 
-            buffer->Seek(curPos, 3);
+            buffer->seek(curPos, 3);
 
             decodeValue(item, buffer, item->tweenConfig->endValue);
+
+            if (buffer->version >= 2)
+            {
+                int pathLen = buffer->readInt();
+                if (pathLen > 0)
+                {
+                    item->tweenConfig->path = new GPath();
+                    std::vector<GPathPoint>& pts = helperPoints;
+                    pts.clear();
+
+                    Vec3 v0, v1, v2;
+
+                    for (int j = 0; j < pathLen; j++)
+                    {
+                        GPathPoint::CurveType curveType = (GPathPoint::CurveType)buffer->readByte();
+                        switch (curveType)
+                        {
+                        case GPathPoint::CurveType::Bezier:
+                            v0.x = buffer->readFloat();
+                            v0.y = buffer->readFloat();
+                            v1.x = buffer->readFloat();
+                            v1.y = buffer->readFloat();
+                            pts.push_back(GPathPoint(v0, v1));
+                            break;
+
+                        case GPathPoint::CurveType::CubicBezier:
+                            v0.x = buffer->readFloat();
+                            v0.y = buffer->readFloat();
+                            v1.x = buffer->readFloat();
+                            v1.y = buffer->readFloat();
+                            v2.x = buffer->readFloat();
+                            v2.y = buffer->readFloat();
+                            pts.push_back(GPathPoint(v0, v1, v2));
+                            break;
+
+                        default:
+                            v0.x = buffer->readFloat();
+                            v0.y = buffer->readFloat();
+                            pts.push_back(GPathPoint(v0, curveType));
+                            break;
+                        }
+                    }
+
+                    item->tweenConfig->path->create(pts.data(), (int)pts.size());
+                }
+            }
         }
         else
         {
             if (item->time > _totalDuration)
                 _totalDuration = item->time;
 
-            buffer->Seek(curPos, 2);
+            buffer->seek(curPos, 2);
 
             decodeValue(item, buffer, item->value);
         }
 
-        buffer->position = curPos + dataLen;
+        buffer->setPos(curPos + dataLen);
     }
 }
 
-void Transition::decodeValue(TransitionItem* item, ByteBuffer * buffer, void* value)
+void Transition::decodeValue(TransitionItem* item, ByteBuffer* buffer, void* value)
 {
     switch (item->type)
     {
@@ -1362,74 +1475,77 @@ void Transition::decodeValue(TransitionItem* item, ByteBuffer * buffer, void* va
     case TransitionActionType::Skew:
     {
         TValue* tvalue = (TValue*)value;
-        tvalue->b1 = buffer->ReadBool();
-        tvalue->b2 = buffer->ReadBool();
-        tvalue->f1 = buffer->ReadFloat();
-        tvalue->f2 = buffer->ReadFloat();
+        tvalue->b1 = buffer->readBool();
+        tvalue->b2 = buffer->readBool();
+        tvalue->f1 = buffer->readFloat();
+        tvalue->f2 = buffer->readFloat();
+
+        if (buffer->version >= 2 && item->type == TransitionActionType::XY)
+            tvalue->b3 = buffer->readBool(); //percent
         break;
     }
 
     case TransitionActionType::Alpha:
     case TransitionActionType::Rotation:
-        ((TValue*)value)->f1 = buffer->ReadFloat();
+        ((TValue*)value)->f1 = buffer->readFloat();
         break;
 
     case TransitionActionType::Scale:
     {
-        ((TValue*)value)->f1 = buffer->ReadFloat();
-        ((TValue*)value)->f2 = buffer->ReadFloat();
+        ((TValue*)value)->f1 = buffer->readFloat();
+        ((TValue*)value)->f2 = buffer->readFloat();
         break;
     }
 
     case TransitionActionType::Color:
-        ((TValue*)value)->setColor(buffer->ReadColor());
+        ((TValue*)value)->setColor(buffer->readColor());
         break;
 
     case TransitionActionType::Animation:
     {
-        ((TValue_Animation*)value)->playing = buffer->ReadBool();
-        ((TValue_Animation*)value)->frame = buffer->ReadInt();
+        ((TValue_Animation*)value)->playing = buffer->readBool();
+        ((TValue_Animation*)value)->frame = buffer->readInt();
         break;
     }
 
     case TransitionActionType::Visible:
-        ((TValue_Visible*)value)->visible = buffer->ReadBool();
+        ((TValue_Visible*)value)->visible = buffer->readBool();
         break;
 
     case TransitionActionType::Sound:
     {
-        ((TValue_Sound*)value)->sound = buffer->ReadS();
-        ((TValue_Sound*)value)->volume = buffer->ReadFloat();
+        ((TValue_Sound*)value)->sound = buffer->readS();
+        ((TValue_Sound*)value)->volume = buffer->readFloat();
         break;
     }
 
     case TransitionActionType::Transition:
     {
-        ((TValue_Transition*)value)->transName = buffer->ReadS();
-        ((TValue_Transition*)value)->playTimes = buffer->ReadInt();
+        ((TValue_Transition*)value)->transName = buffer->readS();
+        ((TValue_Transition*)value)->playTimes = buffer->readInt();
         break;
     }
 
     case TransitionActionType::Shake:
     {
-        ((TValue_Shake*)value)->amplitude = buffer->ReadFloat();
-        ((TValue_Shake*)value)->duration = buffer->ReadFloat();
+        ((TValue_Shake*)value)->amplitude = buffer->readFloat();
+        ((TValue_Shake*)value)->duration = buffer->readFloat();
         break;
     }
 
     case TransitionActionType::ColorFilter:
     {
         TValue* tvalue = (TValue*)value;
-        tvalue->f1 = buffer->ReadFloat();
-        tvalue->f2 = buffer->ReadFloat();
-        tvalue->f3 = buffer->ReadFloat();
-        tvalue->f4 = buffer->ReadFloat();
+        tvalue->f1 = buffer->readFloat();
+        tvalue->f2 = buffer->readFloat();
+        tvalue->f3 = buffer->readFloat();
+        tvalue->f4 = buffer->readFloat();
         break;
     }
 
     case TransitionActionType::Text:
     case TransitionActionType::Icon:
-        ((TValue_Text*)value)->text = buffer->ReadS();
+        ((TValue_Text*)value)->text = buffer->readS();
         break;
 
     default:

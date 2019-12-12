@@ -1,16 +1,16 @@
 #ifndef __GIMAGE_H__
 #define __GIMAGE_H__
 
-#include "cocos2d.h"
-#include "ui/UIScale9Sprite.h"
 #include "FairyGUIMacros.h"
 #include "GObject.h"
+#include "cocos2d.h"
+#include "ui/UIScale9Sprite.h"
 
 NS_FGUI_BEGIN
 
 class FUISprite;
 
-class GImage : public GObject, public IColorGear
+class GImage : public GObject
 {
 public:
     GImage();
@@ -21,8 +21,8 @@ public:
     FlipType getFlip() const;
     void setFlip(FlipType value);
 
-    cocos2d::Color3B getColor() const override;
-    void setColor(const cocos2d::Color3B& value) override;
+    cocos2d::Color3B getColor() const;
+    void setColor(const cocos2d::Color3B& value);
 
     FillMethod getFillMethod() const;
     void setFillMethod(FillMethod value);
@@ -37,14 +37,16 @@ public:
     void setFillAmount(float value);
 
     virtual void constructFromResource() override;
-    
     // modified by LM
     cocos2d::Sprite *getSprite() {
         return (cocos2d::Sprite*)this->_content;
     }
+
+    virtual cocos2d::Value getProp(ObjectPropID propId) override;
+    virtual void setProp(ObjectPropID propId, const cocos2d::Value& value) override;
+
 protected:
     virtual void handleInit() override;
-    virtual void handleSizeChanged() override;
     virtual void handleGrayedChanged() override;
     virtual void setup_beforeAdd(ByteBuffer* buffer, int beginPos) override;
 
